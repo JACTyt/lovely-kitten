@@ -1,3 +1,25 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Godot exports & crash logs
+/build/
+/export/
+*.translation
+mono_crash.*.json
+
+# .NET build output
+bin/
+obj/
+*.user
+*.csproj.old
+.vs/
+
+# Python (asset generator)
+__pycache__/
+*.pyc
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini

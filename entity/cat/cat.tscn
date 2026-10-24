@@ -1,7 +1,13 @@
-[gd_scene load_steps=11 format=3 uid="uid://b1lcow5i0ktdy"]
+[gd_scene load_steps=17 format=3 uid="uid://b1lcow5i0ktdy"]
 
 [ext_resource type="Texture2D" uid="uid://dm211fvgtffbp" path="res://sprites/Cat Sprite Sheet.png" id="1_n38tl"]
 [ext_resource type="Script" uid="uid://dmgh804i2msj6" path="res://entity/cat/Cat.cs" id="2_5rbhi"]
+[ext_resource type="Shader" path="res://shaders/cat_palette.gdshader" id="3_pal"]
+[ext_resource type="Script" path="res://entity/cat/Clothes.cs" id="4_clo"]
+[ext_resource type="Texture2D" path="res://sprites/generated/clothes.png" id="5_clo"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_pal"]
+shader = ExtResource("3_pal")
 
 [sub_resource type="Animation" id="Animation_g6atf"]
 length = 0.001
@@ -67,6 +73,54 @@ tracks/0/keys = {
 "values": [40, 41, 42, 43, 44, 45, 46, 47]
 }
 
+[sub_resource type="Animation" id="Animation_rise"]
+resource_name = "rise"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:frame")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.1),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [41, 42]
+}
+
+[sub_resource type="Animation" id="Animation_fall"]
+resource_name = "fall"
+length = 0.1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:frame")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [43]
+}
+
+[sub_resource type="Animation" id="Animation_pounce"]
+resource_name = "pounce"
+length = 0.3
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:frame")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.1, 0.2),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 1,
+"values": [65, 66, 67]
+}
+
 [sub_resource type="Animation" id="Animation_fpb8a"]
 resource_name = "move"
 length = 0.8
@@ -104,36 +158,48 @@ tracks/0/keys = {
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_kgfne"]
 _data = {
 &"RESET": SubResource("Animation_g6atf"),
+&"fall": SubResource("Animation_fall"),
 &"idle": SubResource("Animation_w4evm"),
 &"idle_waiting": SubResource("Animation_gwlxm"),
 &"jump": SubResource("Animation_v11mb"),
 &"move": SubResource("Animation_fpb8a"),
+&"pounce": SubResource("Animation_pounce"),
+&"rise": SubResource("Animation_rise"),
 &"sleep": SubResource("Animation_27u18")
 }
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_27u18"]
-size = Vector2(14, 12)
-
 [node name="Cat" type="Sprite2D"]
+material = SubResource("ShaderMaterial_pal")
 texture_filter = 1
 texture = ExtResource("1_n38tl")
 hframes = 8
 vframes = 10
 frame = 32
 script = ExtResource("2_5rbhi")
-_minBound = Vector2(-150, 0)
-_maxBound = Vector2(150, 0)
-JumpHeight = 40.0
-JumpDistance = 80.0
-GroundY = 4.0
 
 [node name="CatAnimation" type="AnimationPlayer" parent="."]
 libraries = {
 &"": SubResource("AnimationLibrary_kgfne")
 }
 
-[node name="CharacterBody2D" type="CharacterBody2D" parent="."]
+[node name="Clothes" type="Node2D" parent="."]
+script = ExtResource("4_clo")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="CharacterBody2D"]
-position = Vector2(0, 10)
-shape = SubResource("RectangleShape2D_27u18")
+[node name="Hat" type="Sprite2D" parent="Clothes"]
+texture_filter = 1
+texture = ExtResource("5_clo")
+hframes = 3
+vframes = 3
+
+[node name="Neck" type="Sprite2D" parent="Clothes"]
+texture_filter = 1
+texture = ExtResource("5_clo")
+hframes = 3
+vframes = 3
+
+[node name="Glasses" type="Sprite2D" parent="Clothes"]
+texture_filter = 1
+texture = ExtResource("5_clo")
+hframes = 3
+vframes = 3
+

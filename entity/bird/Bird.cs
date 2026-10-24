@@ -1,79 +1,189 @@
 using Godot;
-using System;
+
+/// <summary>
+/// A catchable creature. Crosses the screen once along an analytic path, then reports Gone.
+/// Frames are stepped in code because owls/fireflies use different sheets than sparrows.
+/// </summary>
 public partial class Bird : Sprite2D
 {
-	private Area2D _area; 
-	private AnimationPlayer _anim;
+	private static readonly Texture2D BirdSheet = GD.Load<Texture2D>("res://sprites/Bird Spritesheet.png");
+	private static readonly Texture2D OwlSheet = GD.Load<Texture2D>("res://sprites/generated/owl.png");
+	private static readonly Texture2D FireflySheet = GD.Load<Texture2D>("res://sprites/generated/firefly.png");
+	private static readonly Shader HsvShader = GD.Load<Shader>("res://shaders/hsv_tint.gdshader");
 
-	private double _speed = 200f;
-	private double _amplitude = 40f;
-	private double _frequency = 3f;
+	private static readonly int[] FlyFrames = { 8, 9, 10, 12, 13, 14, 15 };
+	private static readonly int[] OwlGlide = { 0, 1, 2, 3 };
+	private static readonly int[] OwlDive = { 4, 5 };
+	private static readonly int[] OwlRise = { 6, 7 };
+	private static readonly int[] FireflyGlow = { 0, 1, 2, 3, 2, 1 };
 
-	private double _time;
-	private double _phase;
-	private Vector2 _startPosition;
-	
-	private float _flyDirection = -1f;
-	private Vector2 _flyDirectionChangeRate = new Vector2(1,3);
-	private double _currentFlyDirectionRate;
-	private double _flyDirectionChangeTimer = 0;
+	private const float DespawnX = 140f;
+	private const float SleepDrop = 14f;
+	private const float SleepSlow = 0.6f;
+	private const float LureDrop = 22f;
+	private const float LureSlow = 0.45f;
+	private const float SwoopDepth = 26f;
+	private const float SwoopTime = 1.3f;
 
-	// Called when the node enters the scene tree for the first time.
-	public override void _Ready()
+	public BirdKind Kind { get; private set; }
+	public BirdInfo Info { get; private set; }
+	public bool Gone { get; private set; }
+	/// <summary>Night fireflies are decoration only.</summary>
+	public bool Catchable { get; private set; } = true;
+	public Vector2 Center => Position + Info.CenterOffset;
+
+	private int _dir;
+	private float _speedMul = 1f;
+	private float _lureT;
+	private float _baseY;
+	private float _t;
+	private float _phase;
+	private float _drop;
+	private float _swoopIn;
+	private float _swoop = -1f;
+	private float _animT;
+	private PointLight2D _glow;
+
+	public void Setup(BirdKind kind, int dir, float y, float x, float speedMul = 1f, bool catchable = true)
 	{
-		_area = GetNode<Area2D>("Area2D");
-		_area.BodyEntered += OnBodyEntered;
-		
-		_anim = GetNode<AnimationPlayer>("AnimationPlayer");
-		_anim.Play("fly");
-		_flyDirection = GD.Randf() < 0.5f ? -1f : 1f;
-		_currentFlyDirectionRate = GD.RandRange(_flyDirectionChangeRate.X, _flyDirectionChangeRate.Y);
+		Kind = kind;
+		_speedMul = speedMul;
+		Catchable = catchable;
+		Info = BirdKinds.Info(kind);
+		_dir = dir;
+		_baseY = y;
+		_phase = (float)GD.RandRange(0, Mathf.Tau);
+		_swoopIn = (float)GD.RandRange(1.5, 3.5);
+		Position = new Vector2(x, y);
+
+		switch (kind)
+		{
+			case BirdKind.Owl:
+				Texture = OwlSheet;
+				Hframes = 4;
+				Vframes = 2;
+				break;
+			case BirdKind.Firefly:
+				Texture = FireflySheet;
+				Hframes = 4;
+				Vframes = 1;
+				_glow = new PointLight2D
+				{
+					Texture = Lights.Radial, Color = new Color(0.8f, 1f, 0.45f), Energy = 0.8f, TextureScale = 0.6f,
+				};
+				AddChild(_glow);
+				break;
+			default:
+				Texture = BirdSheet;
+				Hframes = 8;
+				Vframes = 4;
+				break;
+		}
+
+		ApplyLook();
 	}
 
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(double delta)
 	{
-		ChangeDirectionTimer(delta);
-		Fly(delta);
-	}
+		var sc = SceneController.Singleton;
+		float d = (float)delta * (sc?.WorldSpeed ?? 1f);
+		_lureT -= d;
+		bool napLure = sc != null && sc.CatSleeping && Kind != BirdKind.Owl;
+		bool skillLure = _lureT > 0f;
+		float slow = skillLure ? LureSlow : napLure ? SleepSlow : 1f;
+		float drop = skillLure ? LureDrop : napLure ? SleepDrop : 0f;
+		_drop = Mathf.MoveToward(_drop, drop, (skillLure ? 45f : 20f) * d);
+		_t += d * slow;
 
-	private void ChangeDirectionTimer(double delta)
-	{
-		_flyDirectionChangeTimer += delta;
+		float x = Position.X + (_dir * Info.Speed * _speedMul * slow + (sc?.Wind ?? 0f)) * d;
+		float y = _baseY + _drop + Mathf.Sin(_t * Info.Frequency + _phase) * Info.Amplitude;
 
-		if (_flyDirectionChangeTimer >= _currentFlyDirectionRate)
+		int[] frames = FlyFrames;
+		float fps = 10f;
+		switch (Kind)
 		{
-			_flyDirectionChangeTimer = 0;
-
-			// Flip direction
-			_flyDirection *= -1f;
-
-			// Optional: flip sprite visually
-			FlipH = _flyDirection > 0;
-			
-			_currentFlyDirectionRate = GD.RandRange(_flyDirectionChangeRate.X, _flyDirectionChangeRate.Y);
+			case BirdKind.Owl:
+				y += Swoop(d, ref frames);
+				fps = 8f;
+				break;
+			case BirdKind.Firefly:
+				x += Mathf.Sin(_t * 0.9f + _phase) * 8f * d;
+				y += Mathf.Sin(_t * 2.9f) * 3f;
+				frames = FireflyGlow;
+				fps = 8f;
+				_glow.Energy = 0.55f + 0.35f * Mathf.Sin(_t * 4f + _phase);
+				break;
 		}
+
+		Position = new Vector2(x, y);
+		FlipH = _dir > 0; // sheets face left
+		_animT += d * fps;
+		Frame = frames[(int)_animT % frames.Length];
+
+		// Second check guards against wind pushing a slow bird back off the screen it came from.
+		if ((_dir > 0 && x > DespawnX) || (_dir < 0 && x < -DespawnX) || Mathf.Abs(x) > DespawnX + 20f)
+			Gone = true;
 	}
 
-	private void Fly(double delta)
+	/// <summary>Meow / dive shockwave: slow down and swoop low for a while.</summary>
+	public void Lure(float time) => _lureT = Mathf.Max(_lureT, time);
+
+	/// <summary>Magnet pull: shifts the path itself so the sine motion keeps working.</summary>
+	public void Pull(Vector2 delta)
 	{
-		_time += delta;
-
-		double newX = Position.X + _flyDirection * _speed * delta;
-
-		double newY = _startPosition.Y +
-					 Mathf.Sin(_time * _frequency + _phase) * _amplitude;
-
-		Position = new Vector2((float)newX, (float)newY);
+		_baseY += delta.Y;
+		Position += new Vector2(delta.X, delta.Y);
 	}
 
-	private void OnBodyEntered(Node body)
+	private float Swoop(float d, ref int[] frames)
 	{
-		if (body is CharacterBody2D)
+		if (_swoop < 0f)
 		{
-			SceneController.Singleton.AddBirdValue(1);
-			GD.Print("Bird collided with player: ", SceneController.Singleton.GetBirdValue());
-			QueueFree(); // remove bird
+			_swoopIn -= d;
+			frames = OwlGlide;
+			if (_swoopIn > 0f)
+				return 0f;
+			_swoop = 0f;
+			if (Mathf.Abs(Position.X) < 110f)
+				Audio.I.Play("hoot", 0.08f);
 		}
+
+		_swoop += d;
+		float k = _swoop / SwoopTime;
+		if (k >= 1f)
+		{
+			_swoop = -1f;
+			_swoopIn = (float)GD.RandRange(3.0, 5.0);
+			frames = OwlGlide;
+			return 0f;
+		}
+		frames = k < 0.45f ? OwlDive : OwlRise;
+		return Mathf.Sin(k * Mathf.Pi) * SwoopDepth;
+	}
+
+	private void ApplyLook()
+	{
+		var info = Info;
+		float hue = info.HueShift, sat = 1f, val = info.ValueMul;
+		if (BirdKinds.Skinnable(Kind) && GameState.I.EquippedDef(Catalog.SlotBirdSkin)?.Hsv is Vector3 skin)
+		{
+			hue += skin.X;
+			sat *= skin.Y;
+			val *= skin.Z;
+		}
+
+		if (hue == 0f && sat == 1f && val == 1f && info.TintAmount == 0f)
+		{
+			Material = null;
+			return;
+		}
+
+		var m = new ShaderMaterial { Shader = HsvShader };
+		m.SetShaderParameter("hue_shift", hue);
+		m.SetShaderParameter("sat_mul", sat);
+		m.SetShaderParameter("val_mul", val);
+		m.SetShaderParameter("tint", info.TintAmount > 0f ? info.Tint : Colors.White);
+		m.SetShaderParameter("tint_amount", info.TintAmount);
+		Material = m;
 	}
 }

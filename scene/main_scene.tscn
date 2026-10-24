@@ -1,33 +1,20 @@
-[gd_scene load_steps=6 format=3 uid="uid://b70sxj7hck273"]
+[gd_scene load_steps=9 format=3 uid="uid://b70sxj7hck273"]
 
 [ext_resource type="Script" uid="uid://48w7125ns8a2" path="res://scene/SceneController.cs" id="1_wgwml"]
 [ext_resource type="Script" uid="uid://c37ue2b26h42m" path="res://scene/CameraController.cs" id="2_fb1ex"]
-[ext_resource type="Texture2D" uid="uid://cvs6qwkx55ngm" path="res://background.png" id="2_ry1uq"]
-[ext_resource type="PackedScene" uid="uid://cho8knnreq68r" path="res://scene/ui.tscn" id="4_4wnd8"]
+[ext_resource type="Script" path="res://scene/BackgroundController.cs" id="3_bg"]
+[ext_resource type="Script" path="res://ui/Hud.cs" id="4_hud"]
+[ext_resource type="Script" path="res://ui/NightScreen.cs" id="5_night"]
+[ext_resource type="Script" path="res://ui/RunOver.cs" id="7_over"]
+[ext_resource type="Script" path="res://ui/PauseMenu.cs" id="6_pause"]
+[ext_resource type="Script" path="res://scene/Skills.cs" id="8_skills"]
 
-[sub_resource type="CSharpScript" id="CSharpScript_fb1ex"]
-script/source = "using Godot;
-using System;
-
-public partial class Background : Sprite2D
-{
-	// Called when the node enters the scene tree for the first time.
-	public override void _Ready()
-	{
-	}
-
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
-	{
-	}
-}
-"
-
-[node name="MainScene" type="Node2D" node_paths=PackedStringArray("_cameraController")]
+[node name="MainScene" type="Node2D" node_paths=PackedStringArray("_cameraController", "_birdLayer")]
 position = Vector2(0, -1)
 script = ExtResource("1_wgwml")
 _cameraController = NodePath("Camera2D")
 _playAxis = Vector2(0, 4)
+_birdLayer = NodePath("Birds")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 zoom = Vector2(6, 6)
@@ -37,14 +24,37 @@ script = ExtResource("2_fb1ex")
 _maxCameraPosition = Vector2(12, 0)
 _minCameraPosition = Vector2(-12, 0)
 
-[node name="Background" type="Sprite2D" parent="."]
-texture_filter = 1
+[node name="NightTint" type="CanvasModulate" parent="."]
+
+[node name="Background" type="Node2D" parent="." node_paths=PackedStringArray("_day", "_night", "_tint")]
+z_index = -10
 position = Vector2(0, 2)
 scale = Vector2(2, 2)
-texture = ExtResource("2_ry1uq")
-script = SubResource("CSharpScript_fb1ex")
+script = ExtResource("3_bg")
+_day = NodePath("Day")
+_night = NodePath("Night")
+_tint = NodePath("../NightTint")
 
-[node name="CanvasLayer" type="CanvasLayer" parent="."]
-layer = -1
+[node name="Day" type="Sprite2D" parent="Background"]
+texture_filter = 1
 
-[node name="Control" parent="CanvasLayer" instance=ExtResource("4_4wnd8")]
+[node name="Night" type="Sprite2D" parent="Background"]
+modulate = Color(1, 1, 1, 0)
+texture_filter = 1
+
+[node name="Birds" type="Node2D" parent="."]
+
+[node name="Skills" type="Node" parent="."]
+script = ExtResource("8_skills")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+script = ExtResource("4_hud")
+
+[node name="PauseMenu" type="CanvasLayer" parent="."]
+script = ExtResource("6_pause")
+
+[node name="NightScreen" type="CanvasLayer" parent="."]
+script = ExtResource("5_night")
+
+[node name="RunOver" type="CanvasLayer" parent="."]
+script = ExtResource("7_over")
